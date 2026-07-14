@@ -25,7 +25,7 @@ let globalMode = {
 };
 
 let activeBots = []; // Oyundaki botları tutacağımız liste
-const NUM_BOTS = 2; // Kaç bot girecek? (Render çökerse bunu 5 yapın)
+const NUM_BOTS = 1; // Kaç bot girecek? (Render çökerse bunu 5 yapın)
 
 // --- WEB ARAYÜZÜ (HTML/CSS/JS) ---
 const WEB_UI = `
