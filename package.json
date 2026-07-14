@@ -1,7 +1,7 @@
 {
-  "name": "mc-bot-swarm",
+  "name": "mc-bot",
   "version": "1.0.0",
-  "description": "10'lu Aternos Bot Ordusu",
+  "description": "Solo Web Kontrollü Hile Botu",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
