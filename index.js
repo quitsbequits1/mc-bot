@@ -10,13 +10,38 @@ app.use(express.json());
 
 const sahibinOyunAdi = process.env.OWNER_MC_NAME;
 
-// --- MİNECRAFT BOT BAĞLANTISI (CRACK GİRİŞ DÜZELTİLDİ) ---
+// --- GİRİŞ BİLGİLERİNİ KONTROL ET VE OTOMATİK DÜZELT ---
+let sunucuIP = process.env.MC_HOST || '';
+let sunucuPort = parseInt(process.env.MC_PORT) || 25565;
+
+// Eğer kullanıcı IP kısmına "test.aternos.me:12345" gibi port yazdıysa otomatik ayırır:
+if (sunucuIP.includes(':')) {
+    const parcalar = sunucuIP.split(':');
+    sunucuIP = parcalar[0];
+    sunucuPort = parseInt(parcalar[1]);
+}
+
+console.log("-----------------------------------------");
+console.log("🔍 BOTA VERİLEN BİLGİLER KONTROL EDİLİYOR:");
+console.log("Hedef Sunucu:", sunucuIP);
+console.log("Hedef Port:", sunucuPort);
+console.log("Minecraft Sürümü:", process.env.MC_VERSION);
+console.log("Bot Adı:", process.env.MC_USER || 'AIBot');
+console.log("-----------------------------------------");
+
+if (!sunucuIP) {
+    console.log("🛑 KRİTİK HATA: Render ayarlarında MC_HOST (Sunucu IP) girmediniz!");
+} else {
+    console.log("⏳ Sunucuya bağlanılıyor, lütfen bekleyin...");
+}
+
+// --- MİNECRAFT BOT BAĞLANTISI ---
 const mcBot = mineflayer.createBot({
-  host: process.env.MC_HOST,
-  port: parseInt(process.env.MC_PORT) || 25565,
-  username: process.env.MC_USER || 'AIBot', // Eğer Render'da isim girilmezse otomatik AIBot ismini alır
+  host: sunucuIP,
+  port: sunucuPort,
+  username: process.env.MC_USER || 'AIBot',
   version: process.env.MC_VERSION,
-  auth: 'offline' // CRACK/KORSAN SUNUCULARA GİRİŞ İZNİ
+  auth: 'offline' // CRACK SUNUCULAR İÇİN
 });
 
 mcBot.loadPlugin(pathfinder);
@@ -24,9 +49,10 @@ mcBot.loadPlugin(pvp);
 mcBot.loadPlugin(autoeat);
 mcBot.loadPlugin(armorManager);
 
-// --- HATA YAKALAYICILAR (Bot neden giremiyor görelim) ---
-mcBot.on('error', (err) => console.log('🛑 BOT BAĞLANTI HATASI:', err.message));
-mcBot.on('kicked', (reason) => console.log('🛑 BOT SUNUCUDAN ATILDI:', reason));
+// --- HATA YAKALAYICILAR (Neden giremediğini açıkça yazar) ---
+mcBot.on('error', (err) => console.log('🛑 BAĞLANTI HATASI:', err));
+mcBot.on('kicked', (reason) => console.log('🛑 SUNUCUDAN ATILDI:', reason));
+mcBot.on('end', (reason) => console.log('🛑 BAĞLANTI KOPTU:', reason));
 
 // --- YAPAY ZEKA DURUM (STATE) DEĞİŞKENLERİ ---
 let botDurumu = { cooldown: false, armor: false, propvp: false, speed: false };
