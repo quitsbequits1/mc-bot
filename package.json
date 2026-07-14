@@ -1,13 +1,14 @@
 {
   "name": "mc-bot",
   "version": "1.0.0",
-  "description": "Aternos AI Bot",
+  "description": "Aternos Web Kontrollü Hile Botu",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
+    "socket.io": "^4.7.5",
     "minecraft-data": "^3.44.0",
     "mineflayer": "^4.20.1",
     "mineflayer-armor-manager": "^2.0.0",
