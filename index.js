@@ -187,8 +187,17 @@ app.post('/api/toggle', (req, res) => {
     if (ozellik === 'armor' && botDurumu.armor) {
         mcBot.armorManager.equipAll();
     }
+  // --- API UÇ NOKTALARI (Butonların Arka Plan İşlemleri) ---
+app.post('/api/toggle', (req, res) => {
+    const ozellik = req.body.ozellik;
+    botDurumu[ozellik] = !botDurumu[ozellik]; // Durumu tersine çevir (Aç/Kapat)
     
-    res.json({ durum: botDurumu[ozellik], mesaj: \`[\${ozellik.toUpperCase()}] modu \${botDurumu[ozellik] ? 'AKTİF EDİLDİ 🟢' : 'KAPATILDI 🔴'}\` });
+    // Eğer zırh modunu yeni açtıysa anında giyinsin
+    if (ozellik === 'armor' && botDurumu.armor) {
+        mcBot.armorManager.equipAll();
+    }
+    
+    res.json({ durum: botDurumu[ozellik], mesaj: `[${ozellik.toUpperCase()}] modu ${botDurumu[ozellik] ? 'AKTİF EDİLDİ 🟢' : 'KAPATILDI 🔴'}` });
 });
 
 app.post('/api/dal', (req, res) => {
@@ -199,16 +208,16 @@ app.post('/api/dal', (req, res) => {
         if (botDurumu.propvp) {
             mcBot.pvp.attack(aiHedef); // Köprü kurma ve pathfinder aktif
         }
-        res.json({ mesaj: \`🔥 \${hedefAdi} HEDEF ALINDI! YOK EDİLİYOR!\` });
+        res.json({ mesaj: `🔥 ${hedefAdi} HEDEF ALINDI! YOK EDİLİYOR!` });
     } else {
-        res.json({ mesaj: \`❌ \${hedefAdi} etrafta yok veya çok uzak!\` });
+        res.json({ mesaj: `❌ ${hedefAdi} etrafta yok veya çok uzak!` });
     }
 });
 
 app.post('/api/dur', (req, res) => {
     mcBot.pvp.stop();
     aiHedef = null;
-    res.json({ mesaj: \`🛑 Eylemler durduruldu.\` });
+    res.json({ mesaj: "🛑 Eylemler durduruldu." });
 });
 
 app.listen(process.env.PORT || 3000, () => console.log("AI Paneli Aktif!"));
