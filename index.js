@@ -8,66 +8,71 @@ const armorManager = require('mineflayer-armor-manager');
 const autoeat = require('mineflayer-auto-eat').plugin;
 
 // ==========================================
-// 1. WEB SUNUCUSU VE SOCKET.IO KURULUMU
+// 1. WEB SUNUCUSU (PANEL)
 // ==========================================
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const port = process.env.PORT || 3000;
 
-// Bot Durum Değişkenleri
-let botMode = {
-    hacks: false,
-    survival: false,
-    target: null,
+// Tüm botların ortak aklı (Global State)
+let globalMode = {
+    normalPvp: false,
+    hackedPvp: false,
+    killaura: false,
+    targetName: null,
     friends: []
 };
 
-// Web Arayüzü (HTML/CSS/JS)
+let activeBots = []; // Oyundaki botları tutacağımız liste
+const NUM_BOTS = 10; // Kaç bot girecek? (Render çökerse bunu 5 yapın)
+
+// --- WEB ARAYÜZÜ (HTML/CSS/JS) ---
 const WEB_UI = `
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Kontrol Paneli</title>
+    <title>Bot Ordusu Kontrolü</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; padding: 20px; }
-        .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #0f0f0f; color: #fff; padding: 20px; }
+        .container { max-width: 650px; margin: auto; background: #1c1c1c; padding: 20px; border-radius: 12px; box-shadow: 0 0 20px rgba(255,0,0,0.2); }
         h1 { text-align: center; color: #ff3b30; }
-        .control-group { margin-bottom: 20px; padding: 15px; background: #2c2c2c; border-radius: 8px; }
-        input[type="text"], select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 5px; border: none; background: #333; color: white; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .box { margin-bottom: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border-left: 4px solid #555; }
+        input[type="text"] { width: 100%; padding: 12px; margin-top: 5px; border-radius: 6px; border: 1px solid #444; background: #222; color: white; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; margin-top: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.2s; }
+        button:active { transform: scale(0.98); }
         .btn-attack { background: #ff3b30; color: white; }
         .btn-stop { background: #ffcc00; color: black; }
-        .btn-toggle { background: #34c759; color: white; }
-        .btn-toggle.off { background: #555; }
-        .friend-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-        .friend-tag { background: #007aff; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+        .btn-toggle { background: #34c759; color: white; border-left: 5px solid #248a3d; }
+        .btn-toggle.off { background: #444; color: #aaa; border-left: 5px solid #222; }
+        .friend-tag { background: #007aff; padding: 5px 10px; border-radius: 15px; font-size: 14px; display: inline-block; margin: 5px 5px 0 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>💀 Terminatör Bot Paneli</h1>
+        <h1>⚔️ 10'lu Bot Ordusu Paneli ⚔️</h1>
         
-        <div class="control-group">
-            <h3>🎯 Hedef Yok Etme</h3>
-            <input type="text" id="targetName" placeholder="Yok edilecek oyuncunun adını yazın...">
-            <button class="btn-attack" onclick="attack()">Hedefi Yok Et</button>
-            <button class="btn-stop" onclick="stopBot()">Botu Durdur / Hedefi Bırak</button>
+        <div class="box" style="border-left-color: #ff3b30;">
+            <h3>🎯 Orduyu Hedefe Yönlendir</h3>
+            <input type="text" id="targetName" placeholder="Hedefin oyundaki adını yaz...">
+            <button class="btn-attack" onclick="attack()">Hedefe Saldır (Tüm Botlar)</button>
+            <button class="btn-stop" onclick="stopAll()">Saldırıyı Durdur & Serbest Bırak</button>
         </div>
 
-        <div class="control-group">
-            <h3>🛡️ Dost Listesi (Vurmayacak)</h3>
-            <input type="text" id="friendName" placeholder="Dost ekle (Örn: senin_adin)...">
-            <button class="btn-toggle" onclick="addFriend()">Dost Ekle</button>
-            <div class="friend-list" id="friendsContainer"></div>
+        <div class="box" style="border-left-color: #34c759;">
+            <h3>⚡ Savaş Modları (Tümü Açılıp Kapanabilir)</h3>
+            <button id="btnNormalPvp" class="btn-toggle off" onclick="toggleMode('normalPvp')">Normal PVP (Taktiksel Savaş): KAPALI</button>
+            <button id="btnHackedPvp" class="btn-toggle off" onclick="toggleMode('hackedPvp')">Hileli PVP (Hız & Zıplama): KAPALI</button>
+            <button id="btnKillaura" class="btn-toggle off" onclick="toggleMode('killaura')">KillAura & Mob Savunması: KAPALI</button>
         </div>
 
-        <div class="control-group">
-            <h3>⚡ Hile Kontrolleri</h3>
-            <button id="btnHacks" class="btn-toggle off" onclick="toggleHacks()">Hız & Zıplama Hilesi: KAPALI</button>
-            <button id="btnSurvival" class="btn-toggle off" onclick="toggleSurvival()">Oto Gelişme & Zırh: KAPALI</button>
+        <div class="box" style="border-left-color: #007aff;">
+            <h3>🛡️ Dost Listesi (Asla Vurulmaz)</h3>
+            <input type="text" id="friendName" placeholder="Dostun adını yaz...">
+            <button class="btn-toggle" style="background: #007aff;" onclick="addFriend()">Dost Ekle</button>
+            <div id="friendsContainer"></div>
         </div>
     </div>
 
@@ -77,38 +82,29 @@ const WEB_UI = `
         let friends = [];
 
         function attack() { socket.emit('action', { type: 'attack', target: document.getElementById('targetName').value }); }
-        function stopBot() { socket.emit('action', { type: 'stop' }); }
+        function stopAll() { socket.emit('action', { type: 'stop' }); }
         
         function addFriend() {
             const name = document.getElementById('friendName').value;
             if(name && !friends.includes(name)) {
                 friends.push(name);
                 document.getElementById('friendName').value = '';
-                updateFriendsUI();
                 socket.emit('action', { type: 'update_friends', friends: friends });
+                document.getElementById('friendsContainer').innerHTML = friends.map(f => \`<span class="friend-tag">\${f}</span>\`).join('');
             }
         }
 
-        function updateFriendsUI() {
-            document.getElementById('friendsContainer').innerHTML = friends.map(f => \`<span class="friend-tag">\${f}</span>\`).join('');
-        }
-
-        function toggleHacks() {
-            socket.emit('action', { type: 'toggle_hacks' });
-        }
-
-        function toggleSurvival() {
-            socket.emit('action', { type: 'toggle_survival' });
-        }
+        function toggleMode(mode) { socket.emit('action', { type: 'toggle', mode: mode }); }
 
         socket.on('state_update', (state) => {
-            const btnHacks = document.getElementById('btnHacks');
-            btnHacks.className = state.hacks ? 'btn-toggle' : 'btn-toggle off';
-            btnHacks.innerText = 'Hız & Zıplama Hilesi: ' + (state.hacks ? 'AÇIK' : 'KAPALI');
-
-            const btnSurvival = document.getElementById('btnSurvival');
-            btnSurvival.className = state.survival ? 'btn-toggle' : 'btn-toggle off';
-            btnSurvival.innerText = 'Oto Gelişme & Zırh: ' + (state.survival ? 'AÇIK' : 'KAPALI');
+            const updateBtn = (id, isActive, text) => {
+                const btn = document.getElementById(id);
+                btn.className = isActive ? 'btn-toggle' : 'btn-toggle off';
+                btn.innerText = text + (isActive ? 'AÇIK' : 'KAPALI');
+            };
+            updateBtn('btnNormalPvp', state.normalPvp, 'Normal PVP (Taktiksel): ');
+            updateBtn('btnHackedPvp', state.hackedPvp, 'Hileli PVP (Hız & Zıplama): ');
+            updateBtn('btnKillaura', state.killaura, 'KillAura & Mob Savunması: ');
         });
     </script>
 </body>
@@ -116,17 +112,17 @@ const WEB_UI = `
 `;
 
 app.get('/', (req, res) => res.send(WEB_UI));
-server.listen(port, () => console.log(`Web Paneli ${port} portunda açıldı!`));
+server.listen(port, () => console.log(`Ordu Paneli ${port} portunda aktif!`));
 
 // ==========================================
-// 2. BOT BAŞLATMA VE HİLE SİSTEMİ
+// 2. BOT ÜRETİM FABRİKASI
 // ==========================================
-function createBot() {
+function createBot(botName) {
     const bot = mineflayer.createBot({
         host: 'mamitusta67.aternos.me',
         port: 23479,
         version: '1.20.4',
-        username: 'botkazim'
+        username: botName
     });
 
     bot.loadPlugin(pathfinder);
@@ -135,113 +131,133 @@ function createBot() {
     bot.loadPlugin(autoeat);
 
     let mcData;
+    let wanderInterval;
 
     bot.once('spawn', () => {
-        console.log('Bot oyuna girdi!');
+        console.log(`[+] ${botName} sunucuya katıldı ve emir bekliyor.`);
         mcData = require('minecraft-data')(bot.version);
-        
-        // Anti-Fall Damage & Hız Hilesi Döngüsü (Fizik Manipülasyonu)
+        activeBots.push(bot);
+
+        // --- BOT FİZİKLERİ VE HİLELİ PVP KONTROLÜ ---
         bot.on('physicsTick', () => {
-            if (botMode.hacks) {
-                // Hız hilesi: Normalden 3 kat hızlı koşar
-                bot.physics.sprintSpeed = 0.8; 
-                // Otomatik blok atlama (Zıplamadan merdiven çıkar gibi 1.5 blok çıkar)
-                bot.physics.stepHeight = 1.5; 
+            if (globalMode.hackedPvp) {
+                bot.physics.sprintSpeed = 0.8; // Hızlı koşma
+                bot.physics.stepHeight = 1.5;  // Zıplamadan blok çıkma
             } else {
                 bot.physics.sprintSpeed = 0.3; // Varsayılan
-                bot.physics.stepHeight = 0.6; // Varsayılan
+                bot.physics.stepHeight = 0.6;
             }
 
-            // Killaura (Eğer hedef verilmemişse etrafı temizle)
-            if (botMode.survival && !botMode.target) {
+            // KillAura (Otomatik Yakın Savunma - Cooldown uyumlu)
+            if (globalMode.killaura && !globalMode.targetName) {
                 const entity = bot.nearestEntity(e => 
                     (e.type === 'mob' || e.type === 'player') && 
                     e.position.distanceTo(bot.entity.position) < 4.5 &&
                     e.username !== bot.username &&
-                    !botMode.friends.includes(e.username) // DOSTLARA VURMA
+                    !globalMode.friends.includes(e.username)
                 );
 
                 if (entity) {
-                    bot.lookAt(entity.position.offset(0, 1.5, 0));
-                    bot.attack(entity);
+                    // bot.pvp.attack otomatik olarak bekleme süresini (cooldown) hesaplar.
+                    if (!bot.pvp.target) {
+                        bot.pvp.attack(entity);
+                    }
                 }
             }
         });
+
+        // --- OTOMATİK KASILMA (BOŞTA KALINCA GEZİNME) ---
+        // Bot hedefte değilken, gerçek bir oyuncu gibi rastgele gezinir ve etraftaki düşen eşyaları toplar.
+        wanderInterval = setInterval(() => {
+            if (!globalMode.targetName && !bot.pvp.target) {
+                const defaultMove = new Movements(bot, mcData);
+                bot.pathfinder.setMovements(defaultMove);
+                
+                // Rastgele bir yöne 5-10 blok yürü (Gerçekçi görünüm)
+                const x = bot.entity.position.x + (Math.random() * 20 - 10);
+                const z = bot.entity.position.z + (Math.random() * 20 - 10);
+                const y = bot.entity.position.y;
+                bot.pathfinder.setGoal(new goals.GoalNear(x, y, z, 1), true);
+            }
+        }, 8000); // 8 saniyede bir yeni yön seç
     });
 
-    // Otomatik En İyi Eşyayı Kuşanma (Kılıç & Zırh)
+    // --- OTOMATİK ZIRH VE SİLAH ---
     bot.on('playerCollect', (collector, itemDrop) => {
         if (collector !== bot.entity) return;
-        if (!botMode.survival) return;
-
         setTimeout(() => {
-            // Zırhları otomatik giy
-            bot.armorManager.equipAll();
-            
-            // Eline en iyi kılıcı veya baltayı al
+            bot.armorManager.equipAll(); // Zırhı giy
             const bestWeapon = bot.inventory.items().filter(item => item.name.includes('sword') || item.name.includes('axe')).sort((a, b) => b.type - a.type)[0];
-            if (bestWeapon) bot.equip(bestWeapon, 'hand');
+            if (bestWeapon) bot.equip(bestWeapon, 'hand'); // En iyi kılıcı eline al
         }, 500);
     });
 
     bot.on('health', () => {
-        if (botMode.survival) {
-            if (bot.food === 20) bot.autoEat.disable();
-            else bot.autoEat.enable();
+        if (bot.food === 20) bot.autoEat.disable();
+        else bot.autoEat.enable();
+    });
+
+    // --- MOB BİR BOTA VURURSA OTOMATİK CEVAP VERME ---
+    bot.on('entityHurt', (entity, attacker) => {
+        if (entity === bot.entity && attacker && globalMode.killaura) {
+            // Sadece dost değilse karşılık ver
+            if (!globalMode.friends.includes(attacker.username)) {
+                bot.pvp.attack(attacker);
+            }
         }
     });
 
-    // ==========================================
-    // 3. WEB PANELİNDEN GELEN KOMUTLARI DİNLEME
-    // ==========================================
-    io.on('connection', (socket) => {
-        socket.emit('state_update', botMode);
-
-        socket.on('action', (data) => {
-            if (data.type === 'attack' && data.target) {
-                botMode.target = data.target;
-                const targetPlayer = bot.players[data.target]?.entity;
-                if (targetPlayer) {
-                    bot.chat(`Hedef kilitlendi: ${data.target}. Yok ediliyor...`);
-                    const defaultMove = new Movements(bot, mcData);
-                    defaultMove.allowSprinting = true;
-                    bot.pathfinder.setMovements(defaultMove);
-                    
-                    // Sonsuz Target (Hedefi sürekli takip et ve vur)
-                    bot.pvp.attack(targetPlayer);
-                } else {
-                    bot.chat('Hedef haritada bulunamadı veya çok uzakta.');
-                }
-            }
-            else if (data.type === 'stop') {
-                botMode.target = null;
-                bot.pvp.stop();
-                bot.pathfinder.setGoal(null);
-                bot.chat('Saldırı durduruldu. Beklemedeyim.');
-            }
-            else if (data.type === 'update_friends') {
-                botMode.friends = data.friends;
-                console.log('Dostlar güncellendi:', botMode.friends);
-            }
-            else if (data.type === 'toggle_hacks') {
-                botMode.hacks = !botMode.hacks;
-                socket.emit('state_update', botMode);
-            }
-            else if (data.type === 'toggle_survival') {
-                botMode.survival = !botMode.survival;
-                if(botMode.survival) {
-                    bot.armorManager.equipAll(); // Açılır açılmaz zırh giy
-                }
-                socket.emit('state_update', botMode);
-            }
-        });
-    });
-
-    // Bağlantı koparsa zorla geri bağlan (Asla pes etme)
     bot.on('end', () => {
-        console.log('Bağlantı koptu, 10 saniye içinde yeniden giriliyor...');
-        setTimeout(createBot, 10000);
+        console.log(`[-] ${botName} sunucudan koptu. Tekrar deneniyor...`);
+        clearInterval(wanderInterval);
+        activeBots = activeBots.filter(b => b.username !== botName); // Listeden çıkar
+        setTimeout(() => createBot(botName), 10000); // 10 saniye sonra yeniden sok
     });
 }
 
-createBot();
+// ==========================================
+// 3. ORDUYU SIRA İLE OYUNA SOKMA
+// ==========================================
+// Sunucuyu çökertmemek için 10 botu 5'er saniye arayla oyuna sokarız.
+for (let i = 1; i <= NUM_BOTS; i++) {
+    setTimeout(() => {
+        createBot(`botkazim${i}`);
+    }, i * 5000);
+}
+
+// ==========================================
+// 4. WEB PANELİNDEN ORDUYA EMİR VERME
+// ==========================================
+io.on('connection', (socket) => {
+    socket.emit('state_update', globalMode);
+
+    socket.on('action', (data) => {
+        if (data.type === 'attack' && data.target) {
+            globalMode.targetName = data.target;
+            console.log(`ORDUYA EMİR VERİLDİ: ${data.target} YOK EDİLECEK!`);
+            
+            // Tüm botlara aynı anda hedefi saldırt
+            activeBots.forEach(bot => {
+                const targetPlayer = bot.players[data.target]?.entity;
+                if (targetPlayer) {
+                    bot.pvp.attack(targetPlayer); // Cooldown süresine uyarak vurur
+                }
+            });
+        }
+        else if (data.type === 'stop') {
+            globalMode.targetName = null;
+            activeBots.forEach(bot => {
+                bot.pvp.stop();
+                bot.pathfinder.setGoal(null);
+            });
+            console.log('Ordu geri çekildi, boşta geziniyorlar.');
+        }
+        else if (data.type === 'update_friends') {
+            globalMode.friends = data.friends;
+        }
+        else if (data.type === 'toggle') {
+            globalMode[data.mode] = !globalMode[data.mode];
+            socket.emit('state_update', globalMode);
+        }
+    });
+});
