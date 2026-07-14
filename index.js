@@ -31,7 +31,6 @@ let botDurumu = {
     speed: false
 };
 
-let spamSaldiriDongusu;
 let aiHedef = null;
 
 // --- BOT OYUNA GİRDİĞİNDE YAPILACAKLAR ---
@@ -43,10 +42,13 @@ mcBot.once('spawn', () => {
     
     // Köprü (Bridge) ve Blok Koyma Ayarları
     const defaultMove = new Movements(mcBot, mcData);
-    defaultMove.canDig = false; // Gereksiz blok kırmasın
-    defaultMove.allow1by1towers = true; // Kule yapabilsin
-    // Envanterdeki toprak, taş gibi blokları köprü yapmak için kullanır
-    defaultMove.scafoldingBlocks = [mcData.itemsByName['dirt'].id, mcData.itemsByName['cobblestone'].id, mcData.itemsByName['stone'].id];
+    defaultMove.canDig = false; 
+    defaultMove.allow1by1towers = true; 
+    defaultMove.scafoldingBlocks = [
+        mcData.itemsByName['dirt'].id, 
+        mcData.itemsByName['cobblestone'].id, 
+        mcData.itemsByName['stone'].id
+    ];
     mcBot.pathfinder.setMovements(defaultMove);
     
     console.log("Yenilmez AI Aktif!");
@@ -74,17 +76,17 @@ mcBot.on('physicsTick', () => {
         const mesafe = mcBot.entity.position.distanceTo(aiHedef.position);
         if (mesafe < 5) {
             mcBot.lookAt(aiHedef.position.offset(0, 1.6, 0), true);
-            mcBot.attack(aiHedef); // Saniyede 20 tick vurmaya çalışır
+            mcBot.attack(aiHedef); 
         }
     }
 
     // Hız & Zıplama Hilesi Uygulaması
     if (botDurumu.speed) {
-        mcBot.physics.sprintSpeed = 0.9; // Normalin 3 katı hız
-        mcBot.physics.stepHeight = 2;    // Çitlerin veya 2 bloğun üstünden zıplamadan geçer
-        mcBot.setControlState('jump', true); // Sürekli Bunny Hop
+        mcBot.physics.sprintSpeed = 0.9;
+        mcBot.physics.stepHeight = 2;
+        mcBot.setControlState('jump', true);
     } else {
-        mcBot.physics.sprintSpeed = 0.3; // Varsayılana dön
+        mcBot.physics.sprintSpeed = 0.3; 
         mcBot.physics.stepHeight = 0.6;
         mcBot.setControlState('jump', false);
     }
@@ -121,11 +123,8 @@ app.get('/', (req, res) => {
                 
                 <div class="grid">
                     <button id="btn-cooldown" class="btn-off" onclick="toggle('cooldown')" title="(Açılırsa vuruşlar arası beklemez, saniyede 20 kere hedefe kılıç savurur. Anti-Cheat yoksa anında eritir.)">⚡ Cooldown Hilesi</button>
-                    
                     <button id="btn-armor" class="btn-off" onclick="toggle('armor')" title="(Açılırsa envanterindeki en güçlü zırhı otomatik hesaplar ve anında üstüne giyer.)">🛡️ Oto Zırh</button>
-                    
                     <button id="btn-propvp" class="btn-off" onclick="toggle('propvp')" title="(Açılırsa hedefe blok koyarak/köprü yaparak gider, en iyi kılıcı eline alır ve ölümüne savaşır.)">⚔️ Usta PVP Modu</button>
-                    
                     <button id="btn-speed" class="btn-off" onclick="toggle('speed')" title="(Açılırsa botun hareket hızı 3 katına çıkar, tavşan gibi zıplar ve 2 blok yüksekliğindeki duvarlardan tırmanır.)">🌪️ Hız & Fizik Hilesi</button>
                 </div>
 
@@ -138,7 +137,6 @@ app.get('/', (req, res) => {
             </div>
 
             <script>
-                // Arayüz butonlarını güncelleyen fonksiyon
                 function updateBtn(id, isActive, isGreen = false) {
                     const btn = document.getElementById(id);
                     if(isActive) {
@@ -178,26 +176,17 @@ app.get('/', (req, res) => {
     `);
 });
 
-// --- API UÇ NOKTALARI (Butonların Arka Plan İşlemleri) ---
+// --- API UÇ NOKTALARI ---
 app.post('/api/toggle', (req, res) => {
     const ozellik = req.body.ozellik;
-    botDurumu[ozellik] = !botDurumu[ozellik]; // Durumu tersine çevir (Aç/Kapat)
+    botDurumu[ozellik] = !botDurumu[ozellik];
     
-    // Eğer zırh modunu yeni açtıysa anında giyinsin
-    if (ozellik === 'armor' && botDurumu.armor) {
-        mcBot.armorManager.equipAll();
-    }
-  // --- API UÇ NOKTALARI (Butonların Arka Plan İşlemleri) ---
-app.post('/api/toggle', (req, res) => {
-    const ozellik = req.body.ozellik;
-    botDurumu[ozellik] = !botDurumu[ozellik]; // Durumu tersine çevir (Aç/Kapat)
-    
-    // Eğer zırh modunu yeni açtıysa anında giyinsin
     if (ozellik === 'armor' && botDurumu.armor) {
         mcBot.armorManager.equipAll();
     }
     
-    res.json({ durum: botDurumu[ozellik], mesaj: `[${ozellik.toUpperCase()}] modu ${botDurumu[ozellik] ? 'AKTİF EDİLDİ 🟢' : 'KAPATILDI 🔴'}` });
+    const durumMesaji = botDurumu[ozellik] ? 'AKTİF EDİLDİ 🟢' : 'KAPATILDI 🔴';
+    res.json({ durum: botDurumu[ozellik], mesaj: "[" + ozellik.toUpperCase() + "] modu " + durumMesaji });
 });
 
 app.post('/api/dal', (req, res) => {
@@ -206,11 +195,11 @@ app.post('/api/dal', (req, res) => {
     
     if (aiHedef) {
         if (botDurumu.propvp) {
-            mcBot.pvp.attack(aiHedef); // Köprü kurma ve pathfinder aktif
+            mcBot.pvp.attack(aiHedef); 
         }
-        res.json({ mesaj: `🔥 ${hedefAdi} HEDEF ALINDI! YOK EDİLİYOR!` });
+        res.json({ mesaj: "🔥 " + hedefAdi + " HEDEF ALINDI! YOK EDİLİYOR!" });
     } else {
-        res.json({ mesaj: `❌ ${hedefAdi} etrafta yok veya çok uzak!` });
+        res.json({ mesaj: "❌ " + hedefAdi + " etrafta yok veya çok uzak!" });
     }
 });
 
