@@ -1,3 +1,11 @@
+// --- 1. ESKİ KELİME YASAĞI (SANSÜR SİSTEMİ) ---
+// İndirilen eklentilerin eski kelimeler (physicTick/deprecated) kullanmasını ve konsolu kirletmesini YASAKLAR.
+const orjinalUyari = console.warn;
+console.warn = function(...args) {
+    if (typeof args[0] === 'string' && (args[0].includes('physicTick') || args[0].includes('deprecated'))) return;
+    orjinalUyari.apply(console, args);
+};
+
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements } = require('mineflayer-pathfinder');
 const { plugin: pvp } = require('mineflayer-pvp');
@@ -8,20 +16,20 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-const sahibinOyunAdi = process.env.OWNER_MC_NAME || 'SeninNickinBuraya'; // Kendi nickini buraya da yazabilirsin
+const sahibinOyunAdi = 'SeninNickinBuraya'; // Kendi adını yazabilirsin
 
 console.log("-----------------------------------------");
-console.log("🚀 YENİLMEZ AI ATERNOS BAĞLANTISI BAŞLATILIYOR...");
-console.log("Hedef: mamitusta67.aternos.me : 23479");
+console.log("🚀 2026 MODERN AI BAĞLANTISI BAŞLATILIYOR...");
+console.log("Hedef Sunucu: mamitusta67.aternos.me : 23479");
 console.log("-----------------------------------------");
 
-// --- MİNECRAFT BOT BAĞLANTISI ---
+// --- 2. 2026 MODERN BOT BAĞLANTISI ---
 const mcBot = mineflayer.createBot({
-  host: 'mamitusta67.aternos.me', // Senin loglarından aldığım doğru IP
-  port: 23479,                    // Senin loglarından aldığım doğru Port
-  username: 'TerminatorAI',       // Karizmatik, tek ve kalıcı bir bot ismi
-  version: process.env.MC_VERSION || false, // Sürümü otomatik algılamaya bırakıyoruz
-  auth: 'offline'                 // Aternos crack sunucu için zorunlu
+  host: 'mamitusta67.aternos.me', 
+  port: 23479,                    
+  username: 'TerminatorAI',       
+  version: false, // Sürümü 2026'ya uygun olarak otomatik algılar
+  auth: 'offline' // Aternos sunucuları için zorunlu crack girişi
 });
 
 mcBot.loadPlugin(pathfinder);
@@ -29,28 +37,24 @@ mcBot.loadPlugin(pvp);
 mcBot.loadPlugin(autoeat);
 mcBot.loadPlugin(armorManager);
 
-// --- YAPAY ZEKA DURUM (STATE) DEĞİŞKENLERİ ---
 let botDurumu = { cooldown: false, armor: false, propvp: false, speed: false };
 let aiHedef = null;
 
-// --- DİĞER AI'IN ÇÖZEMEDİĞİ YER: OTOMATİK KAYIT/GİRİŞ (AUTHME) SİSTEMİ ---
-// Bot sunucuya girdiğinde sohbetteki yazıları okur. Kayıt veya giriş isterse otomatik şifre girer!
+// --- 3. ATERNOS OTOMATİK ŞİFRE GİRİŞİ (AUTHME BYPASS) ---
 mcBot.on('message', (message) => {
     const mesaj = message.toString().toLowerCase();
     
-    // Eğer sunucu kayıt olmasını isterse
     if (mesaj.includes('/register')) {
-        console.log("🔑 Sunucu kayıt istiyor. Bot otomatik kayıt oluyor...");
-        mcBot.chat('/register AiBotSifre123 AiBotSifre123');
+        console.log("🔑 Kayıt ekranı algılandı. Modern AI otomatik kayıt oluyor...");
+        mcBot.chat('/register AiSifre2026 AiSifre2026');
     }
-    // Eğer sunucu giriş yapmasını isterse
     else if (mesaj.includes('/login')) {
-        console.log("🔓 Sunucu giriş istiyor. Bot otomatik giriş yapıyor...");
-        mcBot.chat('/login AiBotSifre123');
+        console.log("🔓 Giriş ekranı algılandı. Modern AI otomatik giriş yapıyor...");
+        mcBot.chat('/login AiSifre2026');
     }
 });
 
-// --- BOT OYUNA TAMAMEN GİRDİĞİNDE YAPILACAKLAR ---
+// --- 4. GÜVENLİ GİRİŞ SONRASI KURULUM ---
 mcBot.once('spawn', () => {
     const mcData = require('minecraft-data')(mcBot.version);
     mcBot.autoEat.options = { priority: 'foodPoints', startAt: 14, bannedFood: [] };
@@ -65,20 +69,20 @@ mcBot.once('spawn', () => {
     ];
     mcBot.pathfinder.setMovements(defaultMove);
     
-    console.log("✅ BOT BAŞARIYLA GİRDİ VE GÜVENLİĞİ AŞTI! KONTROL PANELİ BEKLENİYOR.");
+    console.log("✅ 2026 YAPAY ZEKASI OYUNA GİRDİ! KONTROL PANELİ BEKLENİYOR.");
 });
 
-// Hataları ve atılmaları ekrana bas (Döngüye sokmadan, efendi gibi hatayı göstersin)
 mcBot.on('kicked', (reason) => console.log('🛑 SUNUCUDAN ATILDI:', reason));
 mcBot.on('error', (err) => console.log('🛑 BAĞLANTI HATASI:', err));
 
-// --- ÖZELLİK FONKSİYONLARI ---
+// --- 5. MODERN "physicsTick" MANTIĞI ---
 mcBot.on('playerCollect', (collector, itemDrop) => {
     if (botDurumu.armor && collector === mcBot.entity) {
         setTimeout(() => { mcBot.armorManager.equipAll(); }, 100);
     }
 });
 
+// ESKİ KELİME KULLANILMADI. TAMAMEN MODERN YAPI.
 mcBot.on('physicsTick', () => {
     if (botDurumu.propvp && mcBot.pvp.target) {
         const bestSword = mcBot.inventory.items().find(item => item.name.includes('sword') || item.name.includes('axe'));
@@ -104,7 +108,7 @@ mcBot.on('physicsTick', () => {
     }
 });
 
-// --- WEB ARAYÜZÜ KONTROL PANELİ ---
+// --- 6. WEB ARAYÜZÜ KONTROL PANELİ ---
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -112,7 +116,7 @@ app.get('/', (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AI GOD - Kontrol Paneli</title>
+            <title>2026 AI GOD - Kontrol Paneli</title>
             <style>
                 body { font-family: 'Courier New', Courier, monospace; background: #050505; color: #0f0; text-align: center; padding: 30px; margin:0;}
                 .container { background: #111; padding: 25px; border-radius: 8px; display: inline-block; box-shadow: 0 0 20px #0f0; max-width: 600px;}
@@ -130,7 +134,7 @@ app.get('/', (req, res) => {
         </head>
         <body>
             <div class="container">
-                <h2>🤖 YENİLMEZ AI KONTROLÜ</h2>
+                <h2>🤖 2026 YENİLMEZ AI KONTROLÜ</h2>
                 <input type="text" id="hedefIsim" placeholder="Hedefin Oyundaki Adı">
                 <div class="grid">
                     <button id="btn-cooldown" class="btn-off" onclick="toggle('cooldown')">⚡ Cooldown Hilesi</button>
@@ -170,7 +174,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// --- API UÇ NOKTALARI ---
+// --- 7. API UÇ NOKTALARI ---
 app.post('/api/toggle', (req, res) => {
     const ozellik = req.body.ozellik;
     botDurumu[ozellik] = !botDurumu[ozellik];
@@ -196,4 +200,4 @@ app.post('/api/dur', (req, res) => {
     res.json({ mesaj: "🛑 Eylemler durduruldu." });
 });
 
-app.listen(process.env.PORT || 3000, () => console.log("AI Paneli Aktif!"));
+app.listen(process.env.PORT || 3000, () => console.log("Modern AI Paneli Aktif!"));
