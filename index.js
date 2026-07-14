@@ -1,203 +1,108 @@
 const mineflayer = require('mineflayer');
-const { pathfinder, Movements } = require('mineflayer-pathfinder');
-const { plugin: pvp } = require('mineflayer-pvp');
-const autoeat = require('mineflayer-auto-eat').plugin;
-const armorManager = require('mineflayer-armor-manager');
 const express = require('express');
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const pvp = require('mineflayer-pvp').plugin;
+const armorManager = require('mineflayer-armor-manager');
+const autoeat = require('mineflayer-auto-eat').plugin;
 
+// ==========================================
+// 1. RENDER İÇİN WEB SUNUCUSU (7/24 AÇIK TUTAR)
+// ==========================================
 const app = express();
-app.use(express.json());
+const port = process.env.PORT || 3000;
 
-const sahibinOyunAdi = process.env.OWNER_MC_NAME;
-
-// --- GİRİŞ BİLGİLERİNİ KONTROL ET VE OTOMATİK DÜZELT ---
-let sunucuIP = process.env.MC_HOST || '';
-let sunucuPort = parseInt(process.env.MC_PORT) || 25565;
-
-// Eğer kullanıcı IP kısmına "test.aternos.me:12345" gibi port yazdıysa otomatik ayırır:
-if (sunucuIP.includes(':')) {
-    const parcalar = sunucuIP.split(':');
-    sunucuIP = parcalar[0];
-    sunucuPort = parseInt(parcalar[1]);
-}
-
-console.log("-----------------------------------------");
-console.log("🔍 BOTA VERİLEN BİLGİLER KONTROL EDİLİYOR:");
-console.log("Hedef Sunucu:", sunucuIP);
-console.log("Hedef Port:", sunucuPort);
-console.log("Minecraft Sürümü:", process.env.MC_VERSION);
-console.log("Bot Adı:", process.env.MC_USER || 'AIBot');
-console.log("-----------------------------------------");
-
-if (!sunucuIP) {
-    console.log("🛑 KRİTİK HATA: Render ayarlarında MC_HOST (Sunucu IP) girmediniz!");
-} else {
-    console.log("⏳ Sunucuya bağlanılıyor, lütfen bekleyin...");
-}
-
-// --- MİNECRAFT BOT BAĞLANTISI ---
-const mcBot = mineflayer.createBot({
-  host: sunucuIP,
-  port: sunucuPort,
-  username: process.env.MC_USER || 'AIBot',
-  version: process.env.MC_VERSION,
-  auth: 'offline' // CRACK SUNUCULAR İÇİN
-});
-
-mcBot.loadPlugin(pathfinder);
-mcBot.loadPlugin(pvp);
-mcBot.loadPlugin(autoeat);
-mcBot.loadPlugin(armorManager);
-
-// --- HATA YAKALAYICILAR (Neden giremediğini açıkça yazar) ---
-mcBot.on('error', (err) => console.log('🛑 BAĞLANTI HATASI:', err));
-mcBot.on('kicked', (reason) => console.log('🛑 SUNUCUDAN ATILDI:', reason));
-mcBot.on('end', (reason) => console.log('🛑 BAĞLANTI KOPTU:', reason));
-
-// --- YAPAY ZEKA DURUM (STATE) DEĞİŞKENLERİ ---
-let botDurumu = { cooldown: false, armor: false, propvp: false, speed: false };
-let aiHedef = null;
-
-// --- BOT OYUNA GİRDİĞİNDE YAPILACAKLAR ---
-mcBot.once('spawn', () => {
-    const mcData = require('minecraft-data')(mcBot.version);
-    mcBot.autoEat.options = { priority: 'foodPoints', startAt: 14, bannedFood: [] };
-    
-    const defaultMove = new Movements(mcBot, mcData);
-    defaultMove.canDig = false; 
-    defaultMove.allow1by1towers = true; 
-    defaultMove.scafoldingBlocks = [
-        mcData.itemsByName['dirt'].id, 
-        mcData.itemsByName['cobblestone'].id, 
-        mcData.itemsByName['stone'].id
-    ];
-    mcBot.pathfinder.setMovements(defaultMove);
-    
-    console.log("✅ YENİLMEZ AI OYUNA BAŞARIYLA GİRDİ!");
-});
-
-// --- ÖZELLİK FONKSİYONLARI ---
-mcBot.on('playerCollect', (collector, itemDrop) => {
-    if (botDurumu.armor && collector === mcBot.entity) {
-        setTimeout(() => { mcBot.armorManager.equipAll(); }, 100);
-    }
-});
-
-mcBot.on('physicsTick', () => {
-    if (botDurumu.propvp && mcBot.pvp.target) {
-        const bestSword = mcBot.inventory.items().find(item => item.name.includes('sword') || item.name.includes('axe'));
-        if (bestSword) mcBot.equip(bestSword, 'hand');
-    }
-
-    if (botDurumu.cooldown && aiHedef) {
-        const mesafe = mcBot.entity.position.distanceTo(aiHedef.position);
-        if (mesafe < 5) {
-            mcBot.lookAt(aiHedef.position.offset(0, 1.6, 0), true);
-            mcBot.attack(aiHedef); 
-        }
-    }
-
-    if (botDurumu.speed) {
-        mcBot.physics.sprintSpeed = 0.9;
-        mcBot.physics.stepHeight = 2;
-        mcBot.setControlState('jump', true);
-    } else {
-        mcBot.physics.sprintSpeed = 0.3; 
-        mcBot.physics.stepHeight = 0.6;
-        mcBot.setControlState('jump', false);
-    }
-});
-
-// --- WEB ARAYÜZÜ ---
 app.get('/', (req, res) => {
-    res.send(`
-        <!DOCTYPE html>
-        <html lang="tr">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AI GOD - Kontrol Paneli</title>
-            <style>
-                body { font-family: 'Courier New', Courier, monospace; background: #050505; color: #0f0; text-align: center; padding: 30px; margin:0;}
-                .container { background: #111; padding: 25px; border-radius: 8px; display: inline-block; box-shadow: 0 0 20px #0f0; max-width: 600px;}
-                h2 { color: #fff; text-shadow: 0 0 10px #0f0; font-size: 24px;}
-                input { padding: 12px; font-size: 16px; width: 70%; margin-bottom: 20px; border-radius: 4px; border: 1px solid #0f0; background: #000; color:#0f0; text-align: center; font-weight:bold;}
-                .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;}
-                button { padding: 15px; font-size: 15px; border: 2px solid; border-radius: 5px; cursor: pointer; transition: 0.3s; font-weight: bold; background: #222;}
-                .btn-off { color: #ff3333; border-color: #ff3333; }
-                .btn-on { background: #ff3333; color: #fff; border-color: #ff3333; box-shadow: 0 0 10px #ff3333;}
-                .btn-on.green { background: #00e676; border-color: #00e676; box-shadow: 0 0 10px #00e676; color:#000;}
-                .action-btn { background: #1976d2; color: #fff; border:none; width: 100%; box-shadow: 0 0 10px #1976d2;}
-                .stop-btn { background: #d32f2f; color: #fff; border:none; width: 100%; box-shadow: 0 0 10px #d32f2f;}
-                #status { margin-top: 20px; font-weight: bold; color: #fff; font-size: 18px;}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2>🤖 YENİLMEZ AI KONTROLÜ</h2>
-                <input type="text" id="hedefIsim" placeholder="Hedefin Oyundaki Adı">
-                <div class="grid">
-                    <button id="btn-cooldown" class="btn-off" onclick="toggle('cooldown')">⚡ Cooldown Hilesi</button>
-                    <button id="btn-armor" class="btn-off" onclick="toggle('armor')">🛡️ Oto Zırh</button>
-                    <button id="btn-propvp" class="btn-off" onclick="toggle('propvp')">⚔️ Usta PVP Modu</button>
-                    <button id="btn-speed" class="btn-off" onclick="toggle('speed')">🌪️ Hız & Fizik Hilesi</button>
-                </div>
-                <div class="grid">
-                    <button class="action-btn" onclick="hedefeDal()">🎯 HEDEFE DAL</button>
-                    <button class="stop-btn" onclick="durdur()">🛑 DURDUR</button>
-                </div>
-                <div id="status">Sistem Hazır. Emrinizi Bekliyor.</div>
-            </div>
-            <script>
-                function updateBtn(id, isActive, isGreen = false) {
-                    const btn = document.getElementById(id);
-                    if(isActive) { btn.className = isGreen ? 'btn-on green' : 'btn-on'; } else { btn.className = 'btn-off'; }
-                }
-                function toggle(ozellik) {
-                    fetch('/api/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ozellik: ozellik })
-                    }).then(res => res.json()).then(data => {
-                        updateBtn('btn-' + ozellik, data.durum, ozellik === 'armor' || ozellik === 'propvp');
-                        document.getElementById('status').innerText = data.mesaj;
-                    });
-                }
-                function hedefeDal() {
-                    const isim = document.getElementById('hedefIsim').value;
-                    fetch('/api/dal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hedef: isim })
-                    }).then(res => res.json()).then(data => { document.getElementById('status').innerText = data.mesaj; });
-                }
-                function durdur() {
-                    fetch('/api/dur', { method: 'POST' }).then(res => res.json()).then(data => { document.getElementById('status').innerText = data.mesaj; });
-                }
-            </script>
-        </body>
-        </html>
-    `);
+    res.send('Bot Aktif ve Minecraft Sunucusunda Çalışıyor!');
 });
 
-// --- API UÇ NOKTALARI ---
-app.post('/api/toggle', (req, res) => {
-    const ozellik = req.body.ozellik;
-    botDurumu[ozellik] = !botDurumu[ozellik];
-    if (ozellik === 'armor' && botDurumu.armor) { mcBot.armorManager.equipAll(); }
-    const durumMesaji = botDurumu[ozellik] ? 'AKTİF EDİLDİ 🟢' : 'KAPATILDI 🔴';
-    res.json({ durum: botDurumu[ozellik], mesaj: "[" + ozellik.toUpperCase() + "] modu " + durumMesaji });
+app.listen(port, () => {
+    console.log(`Render Web Servisi ${port} portunda dinleniyor. Servis kapanmayacak.`);
 });
 
-app.post('/api/dal', (req, res) => {
-    const hedefAdi = req.body.hedef;
-    aiHedef = mcBot.players[hedefAdi]?.entity;
-    if (aiHedef) {
-        if (botDurumu.propvp) { mcBot.pvp.attack(aiHedef); }
-        res.json({ mesaj: "🔥 " + hedefAdi + " HEDEF ALINDI! YOK EDİLİYOR!" });
-    } else {
-        res.json({ mesaj: "❌ " + hedefAdi + " etrafta yok veya çok uzak!" });
-    }
-});
+// ==========================================
+// 2. BOT VE SUNUCU AYARLARI
+// ==========================================
+const botConfig = {
+    host: 'mamitusta67.aternos.me',
+    port: 23479,
+    version: '1.20.4',
+    username: 'botkazim'
+};
 
-app.post('/api/dur', (req, res) => {
-    mcBot.pvp.stop();
-    aiHedef = null;
-    res.json({ mesaj: "🛑 Eylemler durduruldu." });
-});
+// ==========================================
+// 3. YAPAY ZEKA VE HİLE SİSTEMİ
+// ==========================================
+function createBot() {
+    console.log('Sunucuya bağlanılıyor...');
+    const bot = mineflayer.createBot(botConfig);
 
-app.listen(process.env.PORT || 3000, () => console.log("AI Paneli Aktif!"));
+    // Eklentileri bota dahil ediyoruz
+    bot.loadPlugin(pathfinder);
+    bot.loadPlugin(pvp);
+    bot.loadPlugin(armorManager);
+    bot.loadPlugin(autoeat);
+
+    bot.once('spawn', () => {
+        console.log('Bot başarıyla oyuna girdi!');
+        
+        // Hareket yeteneklerini tanımla (Zıplama, yüzme, koşma)
+        const mcData = require('minecraft-data')(bot.version);
+        const defaultMove = new Movements(bot, mcData);
+        defaultMove.allowSprinting = true; // Sürekli depar atar
+        bot.pathfinder.setMovements(defaultMove);
+
+        // --- KILLAURA HİLESİ (Saniyede 4 Vuruş) ---
+        // Yaklaşan her oyuncu veya yaratığa kafasını anında çevirip vurur. Anti-cheat 0 olduğu için seri tıklar.
+        setInterval(() => {
+            const entity = bot.nearestEntity(e => 
+                (e.type === 'mob' || e.type === 'player') && 
+                e.position.distanceTo(bot.entity.position) < 4.5 && // 4.5 blok içindeki her şeye vur
+                e.username !== bot.username // Kendine vurma
+            );
+
+            if (entity) {
+                bot.lookAt(entity.position.offset(0, 1.5, 0), true); // Anında hedefe kilitlen
+                bot.attack(entity); // Acımasızca vur
+            }
+        }, 250); // 250 milisaniyede bir (Seri tıklama)
+    });
+
+    // --- OTOMATİK YEMEK YEME (Hayatta Kalma) ---
+    bot.on('health', () => {
+        if (bot.food === 20) bot.autoEat.disable();
+        else bot.autoEat.enable(); // Canı veya açlığı azalınca envanterdeki ilk yemeği anında yer
+    });
+
+    // --- SOHBET KOMUTLARI (Kontrol Sende) ---
+    bot.on('chat', (username, message) => {
+        if (username === bot.username) return;
+
+        // Yanına çağırmak için sohbete "gel" yaz
+        if (message === 'gel') {
+            const target = bot.players[username]?.entity;
+            if (target) {
+                bot.chat('Geliyorum usta!');
+                bot.pathfinder.setGoal(new goals.GoalFollow(target, 1), true);
+            }
+        }
+
+        // Durdurmak için "dur" yaz
+        if (message === 'dur') {
+            bot.pathfinder.setGoal(null);
+            bot.chat('Durakladım.');
+        }
+    });
+
+    // --- OTOMATİK YENİDEN BAĞLANMA (Asla Düşmez) ---
+    bot.on('end', (reason) => {
+        console.log(`Bağlantı koptu: ${reason}. 10 saniye içinde yeniden bağlanılıyor...`);
+        setTimeout(createBot, 10000); // Sunucu atarsa veya kapanırsa 10 sn sonra zorla geri girer.
+    });
+
+    bot.on('error', (err) => {
+        console.log('Minecraft Hatası:', err);
+    });
+}
+
+// Botu başlat
+createBot();
