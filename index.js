@@ -1,36 +1,29 @@
 // --- 1. ESKİ KELİME YASAĞI (SANSÜR SİSTEMİ) ---
+// İndirilen eklentilerin eski kelimeler (physicTick/deprecated) kullanmasını ve konsolu kirletmesini YASAKLAR.
 const orjinalUyari = console.warn;
 console.warn = function(...args) {
     if (typeof args[0] === 'string' && (args[0].includes('physicTick') || args[0].includes('deprecated'))) return;
     orjinalUyari.apply(console, args);
 };
 
-// --- 2. GÜVENLİ EKLENTİ YÜKLEYİCİ (ÇÖKMELERİ ENGELLER) ---
 const mineflayer = require('mineflayer');
 const { pathfinder, Movements } = require('mineflayer-pathfinder');
+const { plugin: pvp } = require('mineflayer-pvp');
+const autoeat = require('mineflayer-auto-eat').plugin;
+const armorManager = require('mineflayer-armor-manager');
 const express = require('express');
-
-// Eklenti yapısı değişse bile botun çökmesini engelleyen akıllı içe aktarma
-const pvpReq = require('mineflayer-pvp');
-const pvp = typeof pvpReq === 'function' ? pvpReq : pvpReq.plugin;
-
-const autoeatReq = require('mineflayer-auto-eat');
-const autoeat = typeof autoeatReq === 'function' ? autoeatReq : autoeatReq.plugin;
-
-const armorReq = require('mineflayer-armor-manager');
-const armorManager = typeof armorReq === 'function' ? armorReq : (armorReq.plugin || armorReq.armorManager);
 
 const app = express();
 app.use(express.json());
 
-const sahibinOyunAdi = 'SeninNickinBuraya'; // Kendi nickini yaz
+const sahibinOyunAdi = 'SeninNickinBuraya'; // Kendi oyun nickini yazabilirsin
 
 console.log("-----------------------------------------");
 console.log("🚀 2026 MODERN AI BAĞLANTISI BAŞLATILIYOR...");
 console.log("Hedef Sunucu: mamitusta67.aternos.me : 23479");
 console.log("-----------------------------------------");
 
-// --- 3. BOT BAĞLANTISI ---
+// --- 2. 2026 MODERN BOT BAĞLANTISI ---
 const mcBot = mineflayer.createBot({
   host: 'mamitusta67.aternos.me', 
   port: 23479,                    
@@ -39,7 +32,6 @@ const mcBot = mineflayer.createBot({
   auth: 'offline' 
 });
 
-// Artık güvenli olan eklentiler yükleniyor (Hata buradaydı, düzeltildi)
 mcBot.loadPlugin(pathfinder);
 mcBot.loadPlugin(pvp);
 mcBot.loadPlugin(autoeat);
@@ -48,7 +40,7 @@ mcBot.loadPlugin(armorManager);
 let botDurumu = { cooldown: false, armor: false, propvp: false, speed: false };
 let aiHedef = null;
 
-// --- 4. ATERNOS OTOMATİK ŞİFRE GİRİŞİ ---
+// --- 3. ATERNOS OTOMATİK ŞİFRE GİRİŞİ (AUTHME BYPASS) ---
 mcBot.on('message', (message) => {
     const mesaj = message.toString().toLowerCase();
     
@@ -62,7 +54,7 @@ mcBot.on('message', (message) => {
     }
 });
 
-// --- 5. GÜVENLİ GİRİŞ SONRASI KURULUM ---
+// --- 4. GÜVENLİ GİRİŞ SONRASI KURULUM ---
 mcBot.once('spawn', () => {
     const mcData = require('minecraft-data')(mcBot.version);
     mcBot.autoEat.options = { priority: 'foodPoints', startAt: 14, bannedFood: [] };
@@ -83,7 +75,7 @@ mcBot.once('spawn', () => {
 mcBot.on('kicked', (reason) => console.log('🛑 SUNUCUDAN ATILDI:', reason));
 mcBot.on('error', (err) => console.log('🛑 BAĞLANTI HATASI:', err));
 
-// --- 6. MODERN MANTIK (physicsTick) ---
+// --- 5. MODERN "physicsTick" MANTIĞI ---
 mcBot.on('playerCollect', (collector, itemDrop) => {
     if (botDurumu.armor && collector === mcBot.entity) {
         setTimeout(() => { mcBot.armorManager.equipAll(); }, 100);
@@ -115,7 +107,7 @@ mcBot.on('physicsTick', () => {
     }
 });
 
-// --- 7. WEB ARAYÜZÜ KONTROL PANELİ ---
+// --- 6. WEB ARAYÜZÜ KONTROL PANELİ ---
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -181,7 +173,7 @@ app.get('/', (req, res) => {
     `);
 });
 
-// --- 8. API UÇ NOKTALARI ---
+// --- 7. API UÇ NOKTALARI ---
 app.post('/api/toggle', (req, res) => {
     const ozellik = req.body.ozellik;
     botDurumu[ozellik] = !botDurumu[ozellik];
