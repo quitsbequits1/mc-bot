@@ -10,12 +10,13 @@ app.use(express.json());
 
 const sahibinOyunAdi = process.env.OWNER_MC_NAME;
 
-// --- MİNECRAFT BOT BAĞLANTISI ---
+// --- MİNECRAFT BOT BAĞLANTISI (CRACK GİRİŞ DÜZELTİLDİ) ---
 const mcBot = mineflayer.createBot({
   host: process.env.MC_HOST,
   port: parseInt(process.env.MC_PORT) || 25565,
-  username: process.env.MC_USER,
-  version: process.env.MC_VERSION
+  username: process.env.MC_USER || 'AIBot', // Eğer Render'da isim girilmezse otomatik AIBot ismini alır
+  version: process.env.MC_VERSION,
+  auth: 'offline' // CRACK/KORSAN SUNUCULARA GİRİŞ İZNİ
 });
 
 mcBot.loadPlugin(pathfinder);
@@ -23,24 +24,19 @@ mcBot.loadPlugin(pvp);
 mcBot.loadPlugin(autoeat);
 mcBot.loadPlugin(armorManager);
 
-// --- YAPAY ZEKA DURUM (STATE) DEĞİŞKENLERİ ---
-let botDurumu = {
-    cooldown: false,
-    armor: false,
-    propvp: false,
-    speed: false
-};
+// --- HATA YAKALAYICILAR (Bot neden giremiyor görelim) ---
+mcBot.on('error', (err) => console.log('🛑 BOT BAĞLANTI HATASI:', err.message));
+mcBot.on('kicked', (reason) => console.log('🛑 BOT SUNUCUDAN ATILDI:', reason));
 
+// --- YAPAY ZEKA DURUM (STATE) DEĞİŞKENLERİ ---
+let botDurumu = { cooldown: false, armor: false, propvp: false, speed: false };
 let aiHedef = null;
 
 // --- BOT OYUNA GİRDİĞİNDE YAPILACAKLAR ---
 mcBot.once('spawn', () => {
     const mcData = require('minecraft-data')(mcBot.version);
-    
-    // Yemek Ayarları
     mcBot.autoEat.options = { priority: 'foodPoints', startAt: 14, bannedFood: [] };
     
-    // Köprü (Bridge) ve Blok Koyma Ayarları
     const defaultMove = new Movements(mcBot, mcData);
     defaultMove.canDig = false; 
     defaultMove.allow1by1towers = true; 
@@ -51,27 +47,22 @@ mcBot.once('spawn', () => {
     ];
     mcBot.pathfinder.setMovements(defaultMove);
     
-    console.log("Yenilmez AI Aktif!");
+    console.log("✅ YENİLMEZ AI OYUNA BAŞARIYLA GİRDİ!");
 });
 
 // --- ÖZELLİK FONKSİYONLARI ---
-
-// 1. Zırh Yönetimi
 mcBot.on('playerCollect', (collector, itemDrop) => {
     if (botDurumu.armor && collector === mcBot.entity) {
         setTimeout(() => { mcBot.armorManager.equipAll(); }, 100);
     }
 });
 
-// 2. Pro PVP & Cooldown Hack Mantığı
 mcBot.on('physicsTick', () => {
-    // Otomatik kılıç seçimi
     if (botDurumu.propvp && mcBot.pvp.target) {
         const bestSword = mcBot.inventory.items().find(item => item.name.includes('sword') || item.name.includes('axe'));
         if (bestSword) mcBot.equip(bestSword, 'hand');
     }
 
-    // Cooldown kapalıysa (0 bekleme ile spam)
     if (botDurumu.cooldown && aiHedef) {
         const mesafe = mcBot.entity.position.distanceTo(aiHedef.position);
         if (mesafe < 5) {
@@ -80,7 +71,6 @@ mcBot.on('physicsTick', () => {
         }
     }
 
-    // Hız & Zıplama Hilesi Uygulaması
     if (botDurumu.speed) {
         mcBot.physics.sprintSpeed = 0.9;
         mcBot.physics.stepHeight = 2;
@@ -92,7 +82,7 @@ mcBot.on('physicsTick', () => {
     }
 });
 
-// --- WEB ARAYÜZÜ (GELİŞMİŞ KONTROL PANELİ) ---
+// --- WEB ARAYÜZÜ ---
 app.get('/', (req, res) => {
     res.send(`
         <!DOCTYPE html>
@@ -120,55 +110,37 @@ app.get('/', (req, res) => {
             <div class="container">
                 <h2>🤖 YENİLMEZ AI KONTROLÜ</h2>
                 <input type="text" id="hedefIsim" placeholder="Hedefin Oyundaki Adı">
-                
                 <div class="grid">
-                    <button id="btn-cooldown" class="btn-off" onclick="toggle('cooldown')" title="(Açılırsa vuruşlar arası beklemez, saniyede 20 kere hedefe kılıç savurur. Anti-Cheat yoksa anında eritir.)">⚡ Cooldown Hilesi</button>
-                    <button id="btn-armor" class="btn-off" onclick="toggle('armor')" title="(Açılırsa envanterindeki en güçlü zırhı otomatik hesaplar ve anında üstüne giyer.)">🛡️ Oto Zırh</button>
-                    <button id="btn-propvp" class="btn-off" onclick="toggle('propvp')" title="(Açılırsa hedefe blok koyarak/köprü yaparak gider, en iyi kılıcı eline alır ve ölümüne savaşır.)">⚔️ Usta PVP Modu</button>
-                    <button id="btn-speed" class="btn-off" onclick="toggle('speed')" title="(Açılırsa botun hareket hızı 3 katına çıkar, tavşan gibi zıplar ve 2 blok yüksekliğindeki duvarlardan tırmanır.)">🌪️ Hız & Fizik Hilesi</button>
+                    <button id="btn-cooldown" class="btn-off" onclick="toggle('cooldown')">⚡ Cooldown Hilesi</button>
+                    <button id="btn-armor" class="btn-off" onclick="toggle('armor')">🛡️ Oto Zırh</button>
+                    <button id="btn-propvp" class="btn-off" onclick="toggle('propvp')">⚔️ Usta PVP Modu</button>
+                    <button id="btn-speed" class="btn-off" onclick="toggle('speed')">🌪️ Hız & Fizik Hilesi</button>
                 </div>
-
                 <div class="grid">
-                    <button class="action-btn" onclick="hedefeDal()" title="(Yazdığın isme tüm açık özelliklerle saldırır)">🎯 HEDEFE DAL</button>
-                    <button class="stop-btn" onclick="durdur()" title="(Saldırıyı keser, botu sakinleştirir)">🛑 DURDUR</button>
+                    <button class="action-btn" onclick="hedefeDal()">🎯 HEDEFE DAL</button>
+                    <button class="stop-btn" onclick="durdur()">🛑 DURDUR</button>
                 </div>
-
                 <div id="status">Sistem Hazır. Emrinizi Bekliyor.</div>
             </div>
-
             <script>
                 function updateBtn(id, isActive, isGreen = false) {
                     const btn = document.getElementById(id);
-                    if(isActive) {
-                        btn.className = isGreen ? 'btn-on green' : 'btn-on';
-                    } else {
-                        btn.className = 'btn-off';
-                    }
+                    if(isActive) { btn.className = isGreen ? 'btn-on green' : 'btn-on'; } else { btn.className = 'btn-off'; }
                 }
-
                 function toggle(ozellik) {
-                    fetch('/api/toggle', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ozellik: ozellik })
+                    fetch('/api/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ozellik: ozellik })
                     }).then(res => res.json()).then(data => {
                         updateBtn('btn-' + ozellik, data.durum, ozellik === 'armor' || ozellik === 'propvp');
                         document.getElementById('status').innerText = data.mesaj;
                     });
                 }
-
                 function hedefeDal() {
                     const isim = document.getElementById('hedefIsim').value;
-                    fetch('/api/dal', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ hedef: isim })
+                    fetch('/api/dal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hedef: isim })
                     }).then(res => res.json()).then(data => { document.getElementById('status').innerText = data.mesaj; });
                 }
-
                 function durdur() {
-                    fetch('/api/dur', { method: 'POST' }).then(res => res.json())
-                    .then(data => { document.getElementById('status').innerText = data.mesaj; });
+                    fetch('/api/dur', { method: 'POST' }).then(res => res.json()).then(data => { document.getElementById('status').innerText = data.mesaj; });
                 }
             </script>
         </body>
@@ -180,11 +152,7 @@ app.get('/', (req, res) => {
 app.post('/api/toggle', (req, res) => {
     const ozellik = req.body.ozellik;
     botDurumu[ozellik] = !botDurumu[ozellik];
-    
-    if (ozellik === 'armor' && botDurumu.armor) {
-        mcBot.armorManager.equipAll();
-    }
-    
+    if (ozellik === 'armor' && botDurumu.armor) { mcBot.armorManager.equipAll(); }
     const durumMesaji = botDurumu[ozellik] ? 'AKTİF EDİLDİ 🟢' : 'KAPATILDI 🔴';
     res.json({ durum: botDurumu[ozellik], mesaj: "[" + ozellik.toUpperCase() + "] modu " + durumMesaji });
 });
@@ -192,11 +160,8 @@ app.post('/api/toggle', (req, res) => {
 app.post('/api/dal', (req, res) => {
     const hedefAdi = req.body.hedef;
     aiHedef = mcBot.players[hedefAdi]?.entity;
-    
     if (aiHedef) {
-        if (botDurumu.propvp) {
-            mcBot.pvp.attack(aiHedef); 
-        }
+        if (botDurumu.propvp) { mcBot.pvp.attack(aiHedef); }
         res.json({ mesaj: "🔥 " + hedefAdi + " HEDEF ALINDI! YOK EDİLİYOR!" });
     } else {
         res.json({ mesaj: "❌ " + hedefAdi + " etrafta yok veya çok uzak!" });
