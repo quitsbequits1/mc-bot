@@ -1,108 +1,247 @@
 const mineflayer = require('mineflayer');
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const pvp = require('mineflayer-pvp').plugin;
 const armorManager = require('mineflayer-armor-manager');
 const autoeat = require('mineflayer-auto-eat').plugin;
 
 // ==========================================
-// 1. RENDER İÇİN WEB SUNUCUSU (7/24 AÇIK TUTAR)
+// 1. WEB SUNUCUSU VE SOCKET.IO KURULUMU
 // ==========================================
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => {
-    res.send('Bot Aktif ve Minecraft Sunucusunda Çalışıyor!');
-});
-
-app.listen(port, () => {
-    console.log(`Render Web Servisi ${port} portunda dinleniyor. Servis kapanmayacak.`);
-});
-
-// ==========================================
-// 2. BOT VE SUNUCU AYARLARI
-// ==========================================
-const botConfig = {
-    host: 'mamitusta67.aternos.me',
-    port: 23479,
-    version: '1.20.4',
-    username: 'botkazim'
+// Bot Durum Değişkenleri
+let botMode = {
+    hacks: false,
+    survival: false,
+    target: null,
+    friends: []
 };
 
+// Web Arayüzü (HTML/CSS/JS)
+const WEB_UI = `
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Kontrol Paneli</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; padding: 20px; }
+        .container { max-width: 600px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 0 15px rgba(0,0,0,0.5); }
+        h1 { text-align: center; color: #ff3b30; }
+        .control-group { margin-bottom: 20px; padding: 15px; background: #2c2c2c; border-radius: 8px; }
+        input[type="text"], select { width: 100%; padding: 10px; margin-top: 5px; border-radius: 5px; border: none; background: #333; color: white; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; margin-top: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-attack { background: #ff3b30; color: white; }
+        .btn-stop { background: #ffcc00; color: black; }
+        .btn-toggle { background: #34c759; color: white; }
+        .btn-toggle.off { background: #555; }
+        .friend-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+        .friend-tag { background: #007aff; padding: 5px 10px; border-radius: 15px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💀 Terminatör Bot Paneli</h1>
+        
+        <div class="control-group">
+            <h3>🎯 Hedef Yok Etme</h3>
+            <input type="text" id="targetName" placeholder="Yok edilecek oyuncunun adını yazın...">
+            <button class="btn-attack" onclick="attack()">Hedefi Yok Et</button>
+            <button class="btn-stop" onclick="stopBot()">Botu Durdur / Hedefi Bırak</button>
+        </div>
+
+        <div class="control-group">
+            <h3>🛡️ Dost Listesi (Vurmayacak)</h3>
+            <input type="text" id="friendName" placeholder="Dost ekle (Örn: senin_adin)...">
+            <button class="btn-toggle" onclick="addFriend()">Dost Ekle</button>
+            <div class="friend-list" id="friendsContainer"></div>
+        </div>
+
+        <div class="control-group">
+            <h3>⚡ Hile Kontrolleri</h3>
+            <button id="btnHacks" class="btn-toggle off" onclick="toggleHacks()">Hız & Zıplama Hilesi: KAPALI</button>
+            <button id="btnSurvival" class="btn-toggle off" onclick="toggleSurvival()">Oto Gelişme & Zırh: KAPALI</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        let friends = [];
+
+        function attack() { socket.emit('action', { type: 'attack', target: document.getElementById('targetName').value }); }
+        function stopBot() { socket.emit('action', { type: 'stop' }); }
+        
+        function addFriend() {
+            const name = document.getElementById('friendName').value;
+            if(name && !friends.includes(name)) {
+                friends.push(name);
+                document.getElementById('friendName').value = '';
+                updateFriendsUI();
+                socket.emit('action', { type: 'update_friends', friends: friends });
+            }
+        }
+
+        function updateFriendsUI() {
+            document.getElementById('friendsContainer').innerHTML = friends.map(f => \`<span class="friend-tag">\${f}</span>\`).join('');
+        }
+
+        function toggleHacks() {
+            socket.emit('action', { type: 'toggle_hacks' });
+        }
+
+        function toggleSurvival() {
+            socket.emit('action', { type: 'toggle_survival' });
+        }
+
+        socket.on('state_update', (state) => {
+            const btnHacks = document.getElementById('btnHacks');
+            btnHacks.className = state.hacks ? 'btn-toggle' : 'btn-toggle off';
+            btnHacks.innerText = 'Hız & Zıplama Hilesi: ' + (state.hacks ? 'AÇIK' : 'KAPALI');
+
+            const btnSurvival = document.getElementById('btnSurvival');
+            btnSurvival.className = state.survival ? 'btn-toggle' : 'btn-toggle off';
+            btnSurvival.innerText = 'Oto Gelişme & Zırh: ' + (state.survival ? 'AÇIK' : 'KAPALI');
+        });
+    </script>
+</body>
+</html>
+`;
+
+app.get('/', (req, res) => res.send(WEB_UI));
+server.listen(port, () => console.log(`Web Paneli ${port} portunda açıldı!`));
+
 // ==========================================
-// 3. YAPAY ZEKA VE HİLE SİSTEMİ
+// 2. BOT BAŞLATMA VE HİLE SİSTEMİ
 // ==========================================
 function createBot() {
-    console.log('Sunucuya bağlanılıyor...');
-    const bot = mineflayer.createBot(botConfig);
+    const bot = mineflayer.createBot({
+        host: 'mamitusta67.aternos.me',
+        port: 23479,
+        version: '1.20.4',
+        username: 'botkazim'
+    });
 
-    // Eklentileri bota dahil ediyoruz
     bot.loadPlugin(pathfinder);
     bot.loadPlugin(pvp);
     bot.loadPlugin(armorManager);
     bot.loadPlugin(autoeat);
 
+    let mcData;
+
     bot.once('spawn', () => {
-        console.log('Bot başarıyla oyuna girdi!');
+        console.log('Bot oyuna girdi!');
+        mcData = require('minecraft-data')(bot.version);
         
-        // Hareket yeteneklerini tanımla (Zıplama, yüzme, koşma)
-        const mcData = require('minecraft-data')(bot.version);
-        const defaultMove = new Movements(bot, mcData);
-        defaultMove.allowSprinting = true; // Sürekli depar atar
-        bot.pathfinder.setMovements(defaultMove);
-
-        // --- KILLAURA HİLESİ (Saniyede 4 Vuruş) ---
-        // Yaklaşan her oyuncu veya yaratığa kafasını anında çevirip vurur. Anti-cheat 0 olduğu için seri tıklar.
-        setInterval(() => {
-            const entity = bot.nearestEntity(e => 
-                (e.type === 'mob' || e.type === 'player') && 
-                e.position.distanceTo(bot.entity.position) < 4.5 && // 4.5 blok içindeki her şeye vur
-                e.username !== bot.username // Kendine vurma
-            );
-
-            if (entity) {
-                bot.lookAt(entity.position.offset(0, 1.5, 0), true); // Anında hedefe kilitlen
-                bot.attack(entity); // Acımasızca vur
+        // Anti-Fall Damage & Hız Hilesi Döngüsü (Fizik Manipülasyonu)
+        bot.on('physicsTick', () => {
+            if (botMode.hacks) {
+                // Hız hilesi: Normalden 3 kat hızlı koşar
+                bot.physics.sprintSpeed = 0.8; 
+                // Otomatik blok atlama (Zıplamadan merdiven çıkar gibi 1.5 blok çıkar)
+                bot.physics.stepHeight = 1.5; 
+            } else {
+                bot.physics.sprintSpeed = 0.3; // Varsayılan
+                bot.physics.stepHeight = 0.6; // Varsayılan
             }
-        }, 250); // 250 milisaniyede bir (Seri tıklama)
+
+            // Killaura (Eğer hedef verilmemişse etrafı temizle)
+            if (botMode.survival && !botMode.target) {
+                const entity = bot.nearestEntity(e => 
+                    (e.type === 'mob' || e.type === 'player') && 
+                    e.position.distanceTo(bot.entity.position) < 4.5 &&
+                    e.username !== bot.username &&
+                    !botMode.friends.includes(e.username) // DOSTLARA VURMA
+                );
+
+                if (entity) {
+                    bot.lookAt(entity.position.offset(0, 1.5, 0));
+                    bot.attack(entity);
+                }
+            }
+        });
     });
 
-    // --- OTOMATİK YEMEK YEME (Hayatta Kalma) ---
+    // Otomatik En İyi Eşyayı Kuşanma (Kılıç & Zırh)
+    bot.on('playerCollect', (collector, itemDrop) => {
+        if (collector !== bot.entity) return;
+        if (!botMode.survival) return;
+
+        setTimeout(() => {
+            // Zırhları otomatik giy
+            bot.armorManager.equipAll();
+            
+            // Eline en iyi kılıcı veya baltayı al
+            const bestWeapon = bot.inventory.items().filter(item => item.name.includes('sword') || item.name.includes('axe')).sort((a, b) => b.type - a.type)[0];
+            if (bestWeapon) bot.equip(bestWeapon, 'hand');
+        }, 500);
+    });
+
     bot.on('health', () => {
-        if (bot.food === 20) bot.autoEat.disable();
-        else bot.autoEat.enable(); // Canı veya açlığı azalınca envanterdeki ilk yemeği anında yer
+        if (botMode.survival) {
+            if (bot.food === 20) bot.autoEat.disable();
+            else bot.autoEat.enable();
+        }
     });
 
-    // --- SOHBET KOMUTLARI (Kontrol Sende) ---
-    bot.on('chat', (username, message) => {
-        if (username === bot.username) return;
+    // ==========================================
+    // 3. WEB PANELİNDEN GELEN KOMUTLARI DİNLEME
+    // ==========================================
+    io.on('connection', (socket) => {
+        socket.emit('state_update', botMode);
 
-        // Yanına çağırmak için sohbete "gel" yaz
-        if (message === 'gel') {
-            const target = bot.players[username]?.entity;
-            if (target) {
-                bot.chat('Geliyorum usta!');
-                bot.pathfinder.setGoal(new goals.GoalFollow(target, 1), true);
+        socket.on('action', (data) => {
+            if (data.type === 'attack' && data.target) {
+                botMode.target = data.target;
+                const targetPlayer = bot.players[data.target]?.entity;
+                if (targetPlayer) {
+                    bot.chat(`Hedef kilitlendi: ${data.target}. Yok ediliyor...`);
+                    const defaultMove = new Movements(bot, mcData);
+                    defaultMove.allowSprinting = true;
+                    bot.pathfinder.setMovements(defaultMove);
+                    
+                    // Sonsuz Target (Hedefi sürekli takip et ve vur)
+                    bot.pvp.attack(targetPlayer);
+                } else {
+                    bot.chat('Hedef haritada bulunamadı veya çok uzakta.');
+                }
             }
-        }
-
-        // Durdurmak için "dur" yaz
-        if (message === 'dur') {
-            bot.pathfinder.setGoal(null);
-            bot.chat('Durakladım.');
-        }
+            else if (data.type === 'stop') {
+                botMode.target = null;
+                bot.pvp.stop();
+                bot.pathfinder.setGoal(null);
+                bot.chat('Saldırı durduruldu. Beklemedeyim.');
+            }
+            else if (data.type === 'update_friends') {
+                botMode.friends = data.friends;
+                console.log('Dostlar güncellendi:', botMode.friends);
+            }
+            else if (data.type === 'toggle_hacks') {
+                botMode.hacks = !botMode.hacks;
+                socket.emit('state_update', botMode);
+            }
+            else if (data.type === 'toggle_survival') {
+                botMode.survival = !botMode.survival;
+                if(botMode.survival) {
+                    bot.armorManager.equipAll(); // Açılır açılmaz zırh giy
+                }
+                socket.emit('state_update', botMode);
+            }
+        });
     });
 
-    // --- OTOMATİK YENİDEN BAĞLANMA (Asla Düşmez) ---
-    bot.on('end', (reason) => {
-        console.log(`Bağlantı koptu: ${reason}. 10 saniye içinde yeniden bağlanılıyor...`);
-        setTimeout(createBot, 10000); // Sunucu atarsa veya kapanırsa 10 sn sonra zorla geri girer.
-    });
-
-    bot.on('error', (err) => {
-        console.log('Minecraft Hatası:', err);
+    // Bağlantı koparsa zorla geri bağlan (Asla pes etme)
+    bot.on('end', () => {
+        console.log('Bağlantı koptu, 10 saniye içinde yeniden giriliyor...');
+        setTimeout(createBot, 10000);
     });
 }
 
-// Botu başlat
 createBot();
